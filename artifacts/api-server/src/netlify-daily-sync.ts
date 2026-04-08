@@ -1,10 +1,15 @@
+import { scrapeMpfData } from "./lib/mpf-scraper.js";
+
 export const config = {
   schedule: "@daily",
 };
 
 export default async function () {
-  const baseUrl = process.env["URL"] ?? "http://localhost:8080";
-  const res = await fetch(`${baseUrl}/api/mpf/sync`, { method: "POST" });
-  const data = await res.json();
-  console.log("Daily MPF sync result:", data);
+  console.log("[daily-sync] Starting scheduled MPF sync");
+  const result = await scrapeMpfData();
+  if (result.error) {
+    console.error("[daily-sync] Sync failed:", result.error);
+  } else {
+    console.log(`[daily-sync] Sync complete. Funds scraped: ${result.count}`);
+  }
 }

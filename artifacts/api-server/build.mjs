@@ -126,6 +126,7 @@ async function buildAll() {
     entryPoints: {
       "api": path.resolve(artifactDir, "src/serverless-handler.ts"),
       "daily-sync": path.resolve(artifactDir, "src/netlify-daily-sync.ts"),
+      "sync-background": path.resolve(artifactDir, "src/netlify-sync-background.ts"),
     },
     platform: "node",
     bundle: true,
