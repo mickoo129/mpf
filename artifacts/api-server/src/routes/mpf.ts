@@ -75,8 +75,17 @@ router.get("/mpf/funds", async (req, res): Promise<void> => {
   const period = (req.query.period as string) || "1y";
   const trustee = req.query.trustee as string | undefined;
   const category = req.query.category as string | undefined;
+  const search = (req.query.search as string | undefined)?.toLowerCase().trim();
 
-  const funds = await getFundsWithReturn(period, trustee, category);
+  let funds = await getFundsWithReturn(period, trustee, category);
+  if (search) {
+    funds = funds.filter(
+      (f) =>
+        (f.nameZh ?? "").toLowerCase().includes(search) ||
+        f.nameEn.toLowerCase().includes(search) ||
+        f.trustee.toLowerCase().includes(search)
+    );
+  }
   res.json(funds);
 });
 

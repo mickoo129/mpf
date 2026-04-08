@@ -6,32 +6,37 @@ import Rankings from "@/pages/Rankings";
 import FundDetail from "@/pages/FundDetail";
 import CategoryComparison from "@/pages/CategoryComparison";
 import TrusteeComparison from "@/pages/TrusteeComparison";
-import { BarChart3, Building2, Trophy } from "lucide-react";
+import Search from "@/pages/Search";
+import Compare from "@/pages/Compare";
+import Calculator from "@/pages/Calculator";
+import { Trophy, SearchIcon, GitCompare, BarChart3, Calculator as CalcIcon } from "lucide-react";
 
 const queryClient = new QueryClient();
 
 const navItems = [
-  { href: "/", label: "排名", icon: Trophy },
-  { href: "/category", label: "類別", icon: BarChart3 },
-  { href: "/trustee", label: "受託人", icon: Building2 },
+  { href: "/", label: "排名", labelFull: "基金排名", icon: Trophy },
+  { href: "/search", label: "搜尋", labelFull: "搜尋基金", icon: SearchIcon },
+  { href: "/compare", label: "比較", labelFull: "比較基金", icon: GitCompare },
+  { href: "/category", label: "類別", labelFull: "類別比較", icon: BarChart3 },
+  { href: "/calculator", label: "計算器", labelFull: "退休計算", icon: CalcIcon },
 ];
 
 function BottomNav() {
   const [location] = useLocation();
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t md:hidden safe-bottom">
-      <div className="grid grid-cols-3 h-16">
+      <div className="grid grid-cols-5 h-16">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = location === href || (href !== "/" && location.startsWith(href));
           return (
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 text-[9px] font-medium transition-colors ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Icon className={`h-5 w-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+              <Icon className={`h-4.5 w-4.5 ${isActive ? "text-primary" : "text-muted-foreground"}`} size={18} />
               {label}
             </Link>
           );
@@ -45,20 +50,20 @@ function DesktopNav() {
   const [location] = useLocation();
   return (
     <nav className="hidden md:flex items-center gap-0.5">
-      {navItems.map(({ href, label, icon: Icon }) => {
+      {navItems.map(({ href, labelFull, icon: Icon }) => {
         const isActive = location === href || (href !== "/" && location.startsWith(href));
         return (
           <Link
             key={href}
             href={href}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
               isActive
                 ? "bg-primary/10 text-primary"
                 : "text-foreground/60 hover:text-foreground hover:bg-muted"
             }`}
           >
             <Icon className="h-4 w-4" />
-            {label === "排名" ? "基金排名" : label === "類別" ? "類別比較" : "受託人比較"}
+            {labelFull}
           </Link>
         );
       })}
@@ -100,9 +105,12 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Rankings} />
-        <Route path="/fund/:id" component={FundDetail} />
+        <Route path="/search" component={Search} />
+        <Route path="/compare" component={Compare} />
         <Route path="/category" component={CategoryComparison} />
         <Route path="/trustee" component={TrusteeComparison} />
+        <Route path="/calculator" component={Calculator} />
+        <Route path="/fund/:id" component={FundDetail} />
         <Route>
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">

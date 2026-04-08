@@ -105,6 +105,20 @@ async function get<T>(path: string, retries = 5): Promise<T> {
   throw lastError ?? new Error(`API 無法連接: ${path}`);
 }
 
+export async function getAllFunds(opts?: {
+  period?: string;
+  search?: string;
+  category?: string;
+  trustee?: string;
+}): Promise<MpfFundSummary[]> {
+  const p = opts?.period ?? "1y";
+  const params = new URLSearchParams({ period: p });
+  if (opts?.search) params.set("search", opts.search);
+  if (opts?.category) params.set("category", opts.category);
+  if (opts?.trustee) params.set("trustee", opts.trustee);
+  return get<MpfFundSummary[]>(`/mpf/funds?${params}`);
+}
+
 export async function getRankings(
   period: string,
   limit = 10
