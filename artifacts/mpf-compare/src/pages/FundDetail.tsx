@@ -109,8 +109,11 @@ export default function FundDetail() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold text-foreground leading-snug">
-              {fund.nameEn}
+              {fund.nameZh || fund.nameEn}
             </h1>
+            {fund.nameZh && (
+              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{fund.nameEn}</p>
+            )}
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
               <span className="text-[11px] bg-primary/10 text-primary rounded px-2 py-0.5 font-medium">
                 {fund.trustee}

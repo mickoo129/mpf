@@ -1,0 +1,13 @@
+[build]
+  base    = "."
+  command = "pnpm --filter @workspace/mpf-compare run build"
+  publish = "artifacts/mpf-compare/dist/public"
+
+[build.environment]
+  BASE_PATH = "/"
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200

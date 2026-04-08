@@ -181,7 +181,7 @@ export default function TrusteeComparison() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">
-                            {fund.nameEn}
+                            {fund.nameZh || fund.nameEn}
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5">
                             {fundTypeShort(fund.fundType)}

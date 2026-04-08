@@ -45,8 +45,13 @@ function FundCard({
 
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm text-foreground truncate">
-          {fund.nameEn}
+          {fund.nameZh || fund.nameEn}
         </div>
+        {fund.nameZh && (
+          <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+            {fund.nameEn}
+          </div>
+        )}
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 font-medium">
             {fund.trustee}

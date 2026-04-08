@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import * as https from "node:https";
 import { db } from "@workspace/db";
 import {
   mpfFundsTable,
@@ -9,7 +10,8 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 
-const MOBILE_LIST_URL = "https://mfp.mpfa.org.hk/mobile/eng/mpp_list.jsp";
+const MOBILE_LIST_URL_EN = "https://mfp.mpfa.org.hk/mobile/eng/mpp_list.jsp";
+const MOBILE_LIST_URL_ZH = "https://mfp.mpfa.org.hk/mobile/tch/mpp_list.jsp";
 
 interface RawFundRow {
   cfId: string;
@@ -93,6 +95,60 @@ function getTrusteeCode(trusteeText: string): string {
   return codeMap[trusteeText] || trusteeText.substring(0, 6).toUpperCase();
 }
 
+async function fetchHtml(url: string, lang: "en" | "zh"): Promise<string> {
+  // Use node:https directly to avoid undici TLS compatibility issues with MPFA servers
+  return new Promise((resolve, reject) => {
+    const options = {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": lang === "zh" ? "zh-TW,zh;q=0.9" : "en-US,en;q=0.5",
+        Connection: "close",
+      },
+      timeout: 60000,
+    };
+    const req = https.get(url, options, (res) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode} fetching ${url}`));
+        return;
+      }
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+      res.on("error", reject);
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error(`Timeout fetching ${url}`));
+    });
+    req.on("error", reject);
+  });
+}
+
+function extractCfIdNameMap(html: string): Map<string, string> {
+  const map = new Map<string, string>();
+  // Find each fund row by checkbox id (always on one line)
+  const idRegex = /id="sortlist_checkbox(\d+)"/g;
+  let match;
+  while ((match = idRegex.exec(html)) !== null) {
+    const cfId = match[1];
+    if (map.has(cfId)) continue;
+    // Within the next ~1500 chars, find the first left-aligned table cell = Chinese fund name
+    const segment = html.substring(match.index, match.index + 1500);
+    // Pattern: align="left"[whitespace/newlines]class="table">TEXT</td>
+    const nameMatch = segment.match(
+      /align="left"[\s\S]{0,60}class="table">([\s\S]{1,80}?)<\/td>/
+    );
+    if (nameMatch) {
+      const name = nameMatch[1].replace(/[\r\n\s]+/g, " ").trim();
+      if (name) map.set(cfId, name);
+    }
+  }
+  return map;
+}
+
 export async function scrapeMpfData(): Promise<{
   count: number;
   error?: string;
@@ -105,21 +161,15 @@ export async function scrapeMpfData(): Promise<{
   try {
     logger.info("Starting MPF data scrape from MPFA mobile site");
 
-    const response = await fetch(MOBILE_LIST_URL, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-      },
-    });
+    const [htmlEn, htmlZh] = await Promise.all([
+      fetchHtml(MOBILE_LIST_URL_EN, "en"),
+      fetchHtml(MOBILE_LIST_URL_ZH, "zh").catch(() => null),
+    ]);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
+    const zhNameMap = htmlZh ? extractCfIdNameMap(htmlZh) : new Map<string, string>();
+    logger.info({ count: zhNameMap.size }, "Scraped Chinese fund names");
 
-    const html = await response.text();
+    const html = htmlEn;
     const $ = cheerio.load(html);
 
     const funds: RawFundRow[] = [];
@@ -181,6 +231,7 @@ export async function scrapeMpfData(): Promise<{
       const fundData: InsertMpfFund = {
         cfId: raw.cfId,
         nameEn: raw.nameEn || "Unknown Fund",
+        nameZh: zhNameMap.get(raw.cfId) || null,
         trustee,
         trusteeCode,
         scheme: raw.scheme,
@@ -204,6 +255,7 @@ export async function scrapeMpfData(): Promise<{
           target: mpfFundsTable.cfId,
           set: {
             nameEn: fundData.nameEn,
+            nameZh: fundData.nameZh,
             trustee: fundData.trustee,
             trusteeCode: fundData.trusteeCode,
             scheme: fundData.scheme,

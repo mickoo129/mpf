@@ -237,7 +237,7 @@ export default function CategoryComparison() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium text-foreground truncate">
-                              {fund.nameEn}
+                              {fund.nameZh || fund.nameEn}
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <span className="text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5">
