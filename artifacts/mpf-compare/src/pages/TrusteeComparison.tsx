@@ -1,11 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
-  trustees,
-  getFundsByTrustee,
-  categoryLabels,
-  type TimePeriod,
-} from "@/data/mpf-data";
+  getTrustees,
+  formatReturn,
+  returnColor,
+  fundTypeShort,
+  PERIODS,
+  type MpfTrusteeStat,
+} from "@/lib/api";
 import { PeriodSelector } from "@/components/PeriodSelector";
 import {
   Select,
@@ -14,51 +16,52 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronRight, ArrowLeftRight } from "lucide-react";
+import { ChevronRight, ArrowLeftRight, RefreshCw } from "lucide-react";
 
 export default function TrusteeComparison() {
-  const [period, setPeriod] = useState<TimePeriod>("ytd");
-  const [trustee1, setTrustee1] = useState("manulife");
-  const [trustee2, setTrustee2] = useState("hsbc");
+  const [period, setPeriod] = useState("1y");
+  const [trustee1, setTrustee1] = useState("Manulife");
+  const [trustee2, setTrustee2] = useState("HSBC");
+  const [trustees, setTrustees] = useState<MpfTrusteeStat[]>([]);
+  const [loading, setLoading] = useState(true);
   const [, navigate] = useLocation();
 
-  const funds1 = useMemo(
-    () => getFundsByTrustee(trustee1)
-      .filter((f) => f.returns[period] !== null)
-      .sort((a, b) => (b.returns[period] ?? 0) - (a.returns[period] ?? 0)),
-    [trustee1, period]
-  );
-  const funds2 = useMemo(
-    () => getFundsByTrustee(trustee2)
-      .filter((f) => f.returns[period] !== null)
-      .sort((a, b) => (b.returns[period] ?? 0) - (a.returns[period] ?? 0)),
-    [trustee2, period]
-  );
+  useEffect(() => {
+    setLoading(true);
+    getTrustees(period)
+      .then((data) => {
+        setTrustees(data);
+        if (data.length >= 2) {
+          const names = data.map((t) => t.trustee);
+          if (!names.includes(trustee1)) setTrustee1(data[0]?.trustee ?? "");
+          if (!names.includes(trustee2)) setTrustee2(data[1]?.trustee ?? "");
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [period]);
 
-  const avg1 = useMemo(() => {
-    if (!funds1.length) return 0;
-    return Math.round((funds1.reduce((a, f) => a + (f.returns[period] ?? 0), 0) / funds1.length) * 100) / 100;
-  }, [funds1, period]);
+  const t1 = trustees.find((t) => t.trustee === trustee1);
+  const t2 = trustees.find((t) => t.trustee === trustee2);
 
-  const avg2 = useMemo(() => {
-    if (!funds2.length) return 0;
-    return Math.round((funds2.reduce((a, f) => a + (f.returns[period] ?? 0), 0) / funds2.length) * 100) / 100;
-  }, [funds2, period]);
-
-  const t1 = trustees.find((t) => t.id === trustee1)!;
-  const t2 = trustees.find((t) => t.id === trustee2)!;
-  const winner = avg1 > avg2 ? 1 : avg2 > avg1 ? 2 : 0;
+  const avg1 = t1?.avgReturn ?? null;
+  const avg2 = t2?.avgReturn ?? null;
+  const winner =
+    avg1 !== null && avg2 !== null ? (avg1 > avg2 ? 1 : avg2 > avg1 ? 2 : 0) : 0;
 
   return (
     <div className="space-y-4">
       <div className="pt-1">
         <h1 className="text-xl font-bold text-foreground">受託人比較</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">對比兩間受託人所有基金表現</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          對比兩間受託人所有基金表現
+        </p>
       </div>
 
       <div className="bg-card rounded-2xl border shadow-sm px-4 py-3 space-y-3">
         <div>
-          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">時間段</div>
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+            時間段
+          </div>
           <PeriodSelector value={period} onChange={setPeriod} />
         </div>
 
@@ -69,7 +72,9 @@ export default function TrusteeComparison() {
             </SelectTrigger>
             <SelectContent>
               {trustees.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                <SelectItem key={t.trustee} value={t.trustee}>
+                  {t.trustee}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -82,77 +87,127 @@ export default function TrusteeComparison() {
             </SelectTrigger>
             <SelectContent>
               {trustees.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                <SelectItem key={t.trustee} value={t.trustee}>
+                  {t.trustee}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className={`bg-card rounded-2xl border shadow-sm p-4 ${winner === 1 ? "border-blue-400 ring-1 ring-blue-200" : ""}`}>
-          {winner === 1 && (
-            <div className="text-[10px] font-bold text-blue-600 bg-blue-100 rounded-full px-2 py-0.5 inline-block mb-2">領先</div>
-          )}
-          <div className="text-[11px] text-muted-foreground font-medium">{t1.name}</div>
-          <div className={`text-2xl font-bold tabular-nums mt-0.5 ${avg1 >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-            {avg1 >= 0 ? "+" : ""}{avg1.toFixed(2)}%
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-1">{funds1.length} 隻基金</div>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="h-6 w-6 animate-spin text-primary" />
         </div>
-        <div className={`bg-card rounded-2xl border shadow-sm p-4 ${winner === 2 ? "border-orange-400 ring-1 ring-orange-200" : ""}`}>
-          {winner === 2 && (
-            <div className="text-[10px] font-bold text-orange-600 bg-orange-100 rounded-full px-2 py-0.5 inline-block mb-2">領先</div>
-          )}
-          <div className="text-[11px] text-muted-foreground font-medium">{t2.name}</div>
-          <div className={`text-2xl font-bold tabular-nums mt-0.5 ${avg2 >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-            {avg2 >= 0 ? "+" : ""}{avg2.toFixed(2)}%
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-1">{funds2.length} 隻基金</div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {[
-          { funds: funds1, info: t1, color: "blue", avg: avg1 },
-          { funds: funds2, info: t2, color: "orange", avg: avg2 },
-        ].map(({ funds, info, color, avg }) => (
-          <div key={info.id} className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2.5 px-4 py-3.5 border-b bg-muted/30">
-              <div className={`w-2.5 h-2.5 rounded-full ${color === "blue" ? "bg-blue-500" : "bg-orange-500"}`} />
-              <span className="text-sm font-semibold">{info.name}</span>
-              <span className="text-xs text-muted-foreground">({info.nameEn})</span>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div
+              className={`bg-card rounded-2xl border shadow-sm p-4 ${
+                winner === 1 ? "border-blue-400 ring-1 ring-blue-200" : ""
+              }`}
+            >
+              {winner === 1 && (
+                <div className="text-[10px] font-bold text-blue-600 bg-blue-100 rounded-full px-2 py-0.5 inline-block mb-2">
+                  領先
+                </div>
+              )}
+              <div className="text-[11px] text-muted-foreground font-medium">
+                {t1?.trustee ?? trustee1}
+              </div>
+              <div
+                className={`text-2xl font-bold tabular-nums mt-0.5 ${returnColor(avg1)}`}
+              >
+                {formatReturn(avg1)}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                {t1?.fundCount ?? 0} 隻基金
+              </div>
             </div>
-            <div>
-              {funds.map((fund, i) => {
-                const ret = fund.returns[period];
-                const pos = ret !== null && ret >= 0;
-                return (
-                  <button
-                    key={fund.id}
-                    onClick={() => navigate(`/fund/${fund.id}`)}
-                    className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/40 active:bg-muted transition-colors border-b last:border-b-0"
-                  >
-                    <div className="w-5 text-right text-xs font-bold text-muted-foreground flex-shrink-0">{i + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">{fund.name}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{categoryLabels[fund.category]}</div>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <span className={`text-sm font-bold tabular-nums ${pos ? "text-emerald-500" : "text-red-500"}`}>
-                        {ret === null ? "—" : `${pos ? "+" : ""}${ret.toFixed(2)}%`}
-                      </span>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-                    </div>
-                  </button>
-                );
-              })}
+            <div
+              className={`bg-card rounded-2xl border shadow-sm p-4 ${
+                winner === 2 ? "border-orange-400 ring-1 ring-orange-200" : ""
+              }`}
+            >
+              {winner === 2 && (
+                <div className="text-[10px] font-bold text-orange-600 bg-orange-100 rounded-full px-2 py-0.5 inline-block mb-2">
+                  領先
+                </div>
+              )}
+              <div className="text-[11px] text-muted-foreground font-medium">
+                {t2?.trustee ?? trustee2}
+              </div>
+              <div
+                className={`text-2xl font-bold tabular-nums mt-0.5 ${returnColor(avg2)}`}
+              >
+                {formatReturn(avg2)}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                {t2?.fundCount ?? 0} 隻基金
+              </div>
             </div>
           </div>
-        ))}
-      </div>
 
-      <p className="text-center text-[11px] text-muted-foreground pb-2">數據僅供參考，不構成投資建議</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              { stat: t1, color: "blue" },
+              { stat: t2, color: "orange" },
+            ].map(({ stat, color }) => {
+              if (!stat) return null;
+              return (
+                <div
+                  key={stat.trustee}
+                  className="bg-card rounded-2xl border shadow-sm overflow-hidden"
+                >
+                  <div className="flex items-center gap-2.5 px-4 py-3.5 border-b bg-muted/30">
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full ${color === "blue" ? "bg-blue-500" : "bg-orange-500"}`}
+                    />
+                    <span className="text-sm font-semibold">{stat.trustee}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {stat.fundCount} 隻基金
+                    </span>
+                  </div>
+                  <div>
+                    {stat.funds.slice(0, 15).map((fund, i) => (
+                      <button
+                        key={fund.cfId}
+                        onClick={() => navigate(`/fund/${fund.cfId}`)}
+                        className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-muted/40 active:bg-muted transition-colors border-b last:border-b-0"
+                      >
+                        <div className="w-5 text-right text-xs font-bold text-muted-foreground flex-shrink-0">
+                          {i + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-foreground truncate">
+                            {fund.nameEn}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {fundTypeShort(fund.fundType)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span
+                            className={`text-sm font-bold tabular-nums ${returnColor(fund.returnAnn)}`}
+                          >
+                            {formatReturn(fund.returnAnn)}
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <p className="text-center text-[11px] text-muted-foreground pb-2">
+        數據來源：積金局強積金基金平台 · 僅供參考，不構成投資建議
+      </p>
     </div>
   );
 }

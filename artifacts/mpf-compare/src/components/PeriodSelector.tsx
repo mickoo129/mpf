@@ -1,11 +1,9 @@
 import { useRef } from "react";
-import { timePeriodLabels, type TimePeriod } from "@/data/mpf-data";
-
-const periods: TimePeriod[] = ["1d", "1w", "1m", "mtd", "ytd", "3m", "6m", "1y", "3y", "5y", "10y"];
+import { PERIODS } from "@/lib/api";
 
 interface PeriodSelectorProps {
-  value: TimePeriod;
-  onChange: (period: TimePeriod) => void;
+  value: string;
+  onChange: (period: string) => void;
 }
 
 export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
@@ -18,19 +16,19 @@ export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
         className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-1"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
-        {periods.map((p) => {
-          const isActive = value === p;
+        {PERIODS.map((p) => {
+          const isActive = value === p.id;
           return (
             <button
-              key={p}
-              onClick={() => onChange(p)}
+              key={p.id}
+              onClick={() => onChange(p.id)}
               className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 ${
                 isActive
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
               }`}
             >
-              {timePeriodLabels[p]}
+              {p.labelZh}
             </button>
           );
         })}

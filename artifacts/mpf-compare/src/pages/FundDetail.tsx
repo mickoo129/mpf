@@ -1,57 +1,80 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
-import { getFundById, timePeriodLabels, categoryLabels, type TimePeriod } from "@/data/mpf-data";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, TrendingDown, Shield } from "lucide-react";
 import {
-  AreaChart,
-  Area,
+  getFundDetail,
+  formatReturn,
+  returnColor,
+  fundTypeShort,
+  PERIODS,
+  type MpfFundDetail,
+  type MpfFundReturn,
+} from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Shield, RefreshCw, Building2, Calendar } from "lucide-react";
+import {
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 
-const chartPeriods = [
-  { key: "1m", label: "1M", days: 30 },
-  { key: "3m", label: "3M", days: 90 },
-  { key: "6m", label: "6M", days: 180 },
-  { key: "1y", label: "1Y", days: 365 },
-  { key: "3y", label: "3Y", days: 1095 },
-  { key: "5y", label: "5Y", days: 1825 },
-  { key: "max", label: "MAX", days: 99999 },
+const riskColors = [
+  "",
+  "bg-emerald-500",
+  "bg-teal-500",
+  "bg-yellow-500",
+  "bg-orange-500",
+  "bg-red-500",
+  "bg-red-700",
+  "bg-red-900",
 ];
 
-const allPeriods: TimePeriod[] = ["1d", "1w", "1m", "mtd", "ytd", "3m", "6m", "1y", "3y", "5y", "10y"];
-
-const riskColors = ["", "bg-emerald-500", "bg-teal-500", "bg-yellow-500", "bg-orange-500", "bg-red-500"];
+const CALENDAR_YEARS = ["2025", "2024", "2023", "2022", "2021"];
 
 export default function FundDetail() {
-  const [, params] = useRoute("/fund/:id");
+  const [, params] = useRoute("/fund/:cfId");
   const [, navigate] = useLocation();
-  const [chartPeriod, setChartPeriod] = useState("1y");
+  const [fund, setFund] = useState<MpfFundDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fund = params?.id ? getFundById(params.id) : undefined;
+  const cfId = params?.cfId;
 
-  const chartData = useMemo(() => {
-    if (!fund) return [];
-    const periodDef = chartPeriods.find((p) => p.key === chartPeriod);
-    if (!periodDef) return [];
-    const history = fund.priceHistory;
-    if (periodDef.days >= 99999) return history;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - periodDef.days);
-    const cutoffStr = cutoff.toISOString().split("T")[0];
-    return history.filter((h) => h.date >= cutoffStr);
-  }, [fund, chartPeriod]);
+  useEffect(() => {
+    if (!cfId) return;
+    setLoading(true);
+    setError(null);
+    getFundDetail(cfId)
+      .then(setFund)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [cfId]);
 
-  if (!fund) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error || !fund) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <p className="text-muted-foreground text-sm">找不到基金</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/")}>
+          <p className="text-muted-foreground text-sm">
+            {error ?? "找不到基金"}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => navigate("/")}
+          >
             返回
           </Button>
         </div>
@@ -59,12 +82,19 @@ export default function FundDetail() {
     );
   }
 
-  const priceChange = chartData.length >= 2
-    ? chartData[chartData.length - 1].price - chartData[0].price : 0;
-  const priceChangePercent = chartData.length >= 2
-    ? (priceChange / chartData[0].price) * 100 : 0;
-  const isPositive = priceChange >= 0;
-  const chartColor = isPositive ? "#10b981" : "#ef4444";
+  const getReturn = (period: string): MpfFundReturn | undefined =>
+    fund.returns.find((r) => r.period === period);
+
+  const ytdReturn = getReturn("1y");
+  const ytdVal = ytdReturn?.annualizedReturn ?? null;
+
+  const calendarData = CALENDAR_YEARS.map((y) => {
+    const r = getReturn(y);
+    return { year: y, value: r?.annualizedReturn ?? null };
+  }).filter((d) => d.value !== null) as { year: string; value: number }[];
+
+  const riskClass = Math.min(Math.max(fund.riskClass ?? 0, 0), 7);
+  const maxRisk = 7;
 
   return (
     <div className="space-y-3 pb-2">
@@ -78,134 +108,163 @@ export default function FundDetail() {
       <div className="bg-card rounded-2xl border shadow-sm p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-foreground leading-snug">{fund.name}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">{fund.nameEn}</p>
+            <h1 className="text-base font-bold text-foreground leading-snug">
+              {fund.nameEn}
+            </h1>
             <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-              <span className="text-[11px] bg-primary/10 text-primary rounded px-2 py-0.5 font-medium">{fund.trusteeEn}</span>
-              <span className="text-[11px] bg-muted text-muted-foreground rounded px-2 py-0.5">{categoryLabels[fund.category]}</span>
+              <span className="text-[11px] bg-primary/10 text-primary rounded px-2 py-0.5 font-medium">
+                {fund.trustee}
+              </span>
+              <span className="text-[11px] bg-muted text-muted-foreground rounded px-2 py-0.5">
+                {fundTypeShort(fund.fundType)}
+              </span>
             </div>
           </div>
           <div className="text-right flex-shrink-0">
-            <div className="text-2xl font-bold tabular-nums text-foreground">
-              ${fund.price.toFixed(4)}
+            <div
+              className={`text-2xl font-bold tabular-nums ${returnColor(ytdVal)}`}
+            >
+              {formatReturn(ytdVal)}
             </div>
-            <div className={`flex items-center justify-end gap-1 mt-0.5 ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
-              {isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-              <span className="text-sm font-semibold tabular-nums">
-                {isPositive ? "+" : ""}{priceChangePercent.toFixed(2)}%
+            <p className="text-[10px] text-muted-foreground mt-0.5">1 年回報</p>
+          </div>
+        </div>
+
+        {riskClass > 0 && (
+          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t">
+            <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">風險級別</span>
+            <div className="flex gap-1 ml-1">
+              {Array.from({ length: maxRisk }, (_, i) => (
+                <div
+                  key={i}
+                  className={`h-2.5 w-4 rounded-sm ${
+                    i < riskClass ? riskColors[riskClass] : "bg-muted"
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-semibold ml-1">
+              {riskClass} / {maxRisk}
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t text-xs text-muted-foreground">
+          {fund.fundSizeHkm && (
+            <div>
+              <span className="font-medium text-foreground">
+                HK${fund.fundSizeHkm.toFixed(0)}M
               </span>
+              <span className="ml-1">基金規模</span>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-0.5">截至 {fund.priceDate}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t">
-          <Shield className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">風險級別</span>
-          <div className="flex gap-1 ml-1">
-            {[1, 2, 3, 4, 5].map((l) => (
-              <div
-                key={l}
-                className={`h-2.5 w-5 rounded-sm ${l <= fund.riskLevel ? riskColors[fund.riskLevel] : "bg-muted"}`}
-              />
-            ))}
-          </div>
-          <span className="text-xs font-semibold ml-1">{fund.riskLevel} / 5</span>
+          )}
+          {fund.ferPct && (
+            <div>
+              <span className="font-medium text-foreground">
+                {fund.ferPct.toFixed(2)}%
+              </span>
+              <span className="ml-1">基金開支比率</span>
+            </div>
+          )}
+          {fund.launchDate && (
+            <div>
+              <span className="font-medium text-foreground">
+                {fund.launchDate}
+              </span>
+              <span className="ml-1">成立日期</span>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <span className="text-sm font-semibold">價格走勢</span>
-          <div className="flex gap-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-            {chartPeriods.map((p) => (
-              <button
-                key={p.key}
-                onClick={() => setChartPeriod(p.key)}
-                className={`flex-shrink-0 px-2.5 py-1 rounded text-[11px] font-semibold transition-all ${
-                  chartPeriod === p.key
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+      {calendarData.length > 0 && (
+        <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b">
+            <Calendar className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold">各年度回報</span>
+          </div>
+          <div className="h-[180px] px-2 py-3">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={calendarData}
+                margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
               >
-                {p.label}
-              </button>
-            ))}
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--border))"
+                  opacity={0.5}
+                />
+                <XAxis
+                  dataKey="year"
+                  tick={{
+                    fontSize: 11,
+                    fill: "hsl(var(--muted-foreground))",
+                  }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{
+                    fontSize: 10,
+                    fill: "hsl(var(--muted-foreground))",
+                  }}
+                  tickFormatter={(v) => `${v}%`}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-popover border rounded-xl shadow-lg px-3 py-2">
+                        <div className="text-[11px] text-muted-foreground">
+                          {d.year}年
+                        </div>
+                        <div
+                          className={`text-sm font-bold mt-0.5 ${returnColor(d.value)}`}
+                        >
+                          {formatReturn(d.value)}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                  {calendarData.map((entry, i) => (
+                    <Cell
+                      key={i}
+                      fill={entry.value >= 0 ? "#10b981" : "#ef4444"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
-        <div className="h-[240px] sm:h-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={chartColor} stopOpacity={0.2} />
-                  <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                tickFormatter={(v) => {
-                  const d = new Date(v);
-                  return `${d.getMonth() + 1}/${d.getDate()}`;
-                }}
-                interval="preserveStartEnd"
-                minTickGap={60}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                domain={["auto", "auto"]}
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                tickFormatter={(v) => `$${v.toFixed(1)}`}
-                width={50}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.[0]) return null;
-                  const d = payload[0].payload;
-                  return (
-                    <div className="bg-popover border rounded-xl shadow-lg px-3 py-2">
-                      <div className="text-[11px] text-muted-foreground">{d.date}</div>
-                      <div className="text-sm font-bold mt-0.5" style={{ color: chartColor }}>
-                        HK${d.price.toFixed(4)}
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="price"
-                stroke={chartColor}
-                strokeWidth={2}
-                fill="url(#grad)"
-                dot={false}
-                activeDot={{ r: 4, fill: chartColor, strokeWidth: 2, stroke: "hsl(var(--card))" }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      )}
 
       <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b">
           <span className="text-sm font-semibold">各時段回報</span>
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 divide-x divide-y divide-border">
-          {allPeriods.map((p) => {
-            const ret = fund.returns[p];
-            const pos = ret !== null && ret >= 0;
+          {PERIODS.map((p) => {
+            const r = getReturn(p.id);
+            const val = r?.annualizedReturn ?? null;
             return (
-              <div key={p} className="flex flex-col items-center justify-center py-4 px-2">
-                <div className="text-[11px] text-muted-foreground mb-1 font-medium">{timePeriodLabels[p]}</div>
-                <div className={`text-base font-bold tabular-nums ${
-                  ret === null ? "text-muted-foreground" : pos ? "text-emerald-500" : "text-red-500"
-                }`}>
-                  {ret === null ? "—" : `${pos ? "+" : ""}${ret.toFixed(2)}%`}
+              <div
+                key={p.id}
+                className="flex flex-col items-center justify-center py-4 px-2"
+              >
+                <div className="text-[11px] text-muted-foreground mb-1 font-medium">
+                  {p.labelZh}
+                </div>
+                <div
+                  className={`text-base font-bold tabular-nums ${returnColor(val)}`}
+                >
+                  {formatReturn(val)}
                 </div>
               </div>
             );
@@ -214,8 +273,15 @@ export default function FundDetail() {
       </div>
 
       <div className="bg-muted/50 rounded-xl px-4 py-3">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground font-medium">
+            {fund.scheme}
+          </span>
+        </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          計劃: {fund.scheme} · 數據僅供參考，不構成投資建議。過去表現並不代表未來表現。
+          數據來源：積金局強積金基金平台（mfp.mpfa.org.hk）·
+          回報數據以截至 2026 年 2 月為準 · 僅供參考，不構成投資建議。過去表現並不代表未來表現。
         </p>
       </div>
     </div>
