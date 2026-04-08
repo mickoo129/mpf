@@ -1,5 +1,4 @@
 import * as cheerio from "cheerio";
-import * as https from "node:https";
 import { db } from "@workspace/db";
 import {
   mpfFundsTable,
@@ -96,35 +95,25 @@ function getTrusteeCode(trusteeText: string): string {
 }
 
 async function fetchHtml(url: string, lang: "en" | "zh"): Promise<string> {
-  // Use node:https directly to avoid undici TLS compatibility issues with MPFA servers
-  return new Promise((resolve, reject) => {
-    const options = {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 300_000); // 5 min
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
       headers: {
         "User-Agent":
           "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15",
         Accept:
           "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": lang === "zh" ? "zh-TW,zh;q=0.9" : "en-US,en;q=0.5",
-        Connection: "close",
+        "Accept-Encoding": "gzip, deflate, br",
       },
-      timeout: 60000,
-    };
-    const req = https.get(url, options, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode} fetching ${url}`));
-        return;
-      }
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-      res.on("error", reject);
     });
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error(`Timeout fetching ${url}`));
-    });
-    req.on("error", reject);
-  });
+    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function extractCfIdNameMap(html: string): Map<string, string> {
