@@ -65,18 +65,36 @@ export default function FundDetail() {
   if (error || !fund) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
+        <div className="text-center space-y-3">
           <p className="text-muted-foreground text-sm">
             {error ?? "找不到基金"}
           </p>
+          {error && (
+            <button
+              onClick={() => {
+                if (!cfId) return;
+                setLoading(true);
+                setError(null);
+                getFundDetail(cfId)
+                  .then(setFund)
+                  .catch((e) => setError(e.message))
+                  .finally(() => setLoading(false));
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+              重試
+            </button>
+          )}
+          <div>
           <Button
             variant="outline"
             size="sm"
-            className="mt-3"
             onClick={() => navigate("/")}
           >
             返回
           </Button>
+          </div>
         </div>
       </div>
     );

@@ -24,11 +24,13 @@ export default function TrusteeComparison() {
   const [trustee2, setTrustee2] = useState("HSBC");
   const [trustees, setTrustees] = useState<MpfTrusteeStat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [, navigate] = useLocation();
 
-  useEffect(() => {
+  const load = (p: string) => {
     setLoading(true);
-    getTrustees(period)
+    setError(null);
+    getTrustees(p)
       .then((data) => {
         setTrustees(data);
         if (data.length >= 2) {
@@ -37,7 +39,12 @@ export default function TrusteeComparison() {
           if (!names.includes(trustee2)) setTrustee2(data[1]?.trustee ?? "");
         }
       })
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load(period);
   }, [period]);
 
   const t1 = trustees.find((t) => t.trustee === trustee1);
@@ -99,6 +106,17 @@ export default function TrusteeComparison() {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center space-y-3">
+          <p className="text-sm text-red-600">{`載入失敗：${error}`}</p>
+          <button
+            onClick={() => load(period)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 active:bg-red-300 px-3 py-1.5 rounded-full transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            重試
+          </button>
         </div>
       ) : (
         <>

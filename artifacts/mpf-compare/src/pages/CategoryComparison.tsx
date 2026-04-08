@@ -36,13 +36,15 @@ export default function CategoryComparison() {
   const [categories, setCategories] = useState<MpfCategoryStat[]>([]);
   const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [, navigate] = useLocation();
 
   const periodLabel = PERIODS.find((p) => p.id === period)?.labelZh || period;
 
-  useEffect(() => {
+  const load = (p: string) => {
     setLoading(true);
-    Promise.all([getCategories(period), getTrustees(period)])
+    setError(null);
+    Promise.all([getCategories(p), getTrustees(p)])
       .then(([cats, trustees]) => {
         setCategories(cats);
         const allFunds = trustees.flatMap((t) => t.funds);
@@ -66,7 +68,12 @@ export default function CategoryComparison() {
         });
         setGroups(grps);
       })
+      .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load(period);
   }, [period]);
 
   const chartData = categories.map((c) => ({
@@ -95,6 +102,17 @@ export default function CategoryComparison() {
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center space-y-3">
+          <p className="text-sm text-red-600">{`載入失敗：${error}`}</p>
+          <button
+            onClick={() => load(period)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 active:bg-red-300 px-3 py-1.5 rounded-full transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            重試
+          </button>
         </div>
       ) : (
         <>

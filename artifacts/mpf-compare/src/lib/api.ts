@@ -72,27 +72,37 @@ export interface MpfSyncStatus {
   completedAt: string | null;
 }
 
-async function get<T>(path: string, retries = 3): Promise<T> {
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function get<T>(path: string, retries = 5): Promise<T> {
+  let lastError: Error | null = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(`${BASE}${path}`);
       if (res.status === 502 || res.status === 503 || res.status === 504) {
+        lastError = new Error(`API ${res.status}: ${path}`);
         if (attempt < retries) {
-          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+          await sleep(1000 * Math.pow(1.5, attempt));
           continue;
         }
+        throw lastError;
       }
       if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
       return res.json() as Promise<T>;
     } catch (err) {
-      if (attempt < retries && err instanceof TypeError) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-        continue;
+      if (err instanceof TypeError) {
+        lastError = err;
+        if (attempt < retries) {
+          await sleep(1000 * Math.pow(1.5, attempt));
+          continue;
+        }
       }
       throw err;
     }
   }
-  throw new Error(`API 無法連接: ${path}`);
+  throw lastError ?? new Error(`API 無法連接: ${path}`);
 }
 
 export async function getRankings(

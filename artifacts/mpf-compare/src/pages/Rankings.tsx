@@ -115,13 +115,17 @@ export default function Rankings() {
 
   const periodLabel = PERIODS.find((p) => p.id === period)?.labelZh || period;
 
-  useEffect(() => {
+  const load = (p: string) => {
     setLoading(true);
     setError(null);
-    getRankings(period, 10)
+    getRankings(p, 10)
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load(period);
   }, [period]);
 
   return (
@@ -147,12 +151,19 @@ export default function Rankings() {
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center space-y-3">
           <p className="text-sm text-red-600">
             {error.includes("No fund") || error.includes("404")
               ? "數據正在載入中，請稍候片刻後重試"
               : `載入失敗：${error}`}
           </p>
+          <button
+            onClick={() => load(period)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 active:bg-red-300 px-3 py-1.5 rounded-full transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            重試
+          </button>
         </div>
       )}
 
