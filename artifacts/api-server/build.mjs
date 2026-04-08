@@ -132,7 +132,7 @@ async function buildAll() {
     format: "cjs",
     outdir: netlifyFunctionsDir,
     logLevel: "info",
-    external,
+    external: [...external, "pino-pretty", "thread-stream"],
     sourcemap: "linked",
   });
 }
