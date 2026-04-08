@@ -120,7 +120,7 @@ async function buildAll() {
     banner,
   });
 
-  // Build Netlify Functions (pre-compiled so Netlify doesn't need to re-bundle)
+  // Build Netlify Functions as CommonJS (Netlify's runtime wraps .mjs in CJS which breaks import.meta.url)
   const netlifyFunctionsDir = path.resolve(repoRoot, "netlify/functions");
   await esbuild({
     entryPoints: {
@@ -129,13 +129,11 @@ async function buildAll() {
     },
     platform: "node",
     bundle: true,
-    format: "esm",
+    format: "cjs",
     outdir: netlifyFunctionsDir,
-    outExtension: { ".js": ".mjs" },
     logLevel: "info",
     external,
     sourcemap: "linked",
-    banner,
   });
 }
 
