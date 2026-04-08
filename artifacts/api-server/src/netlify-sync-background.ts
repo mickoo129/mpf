@@ -1,6 +1,6 @@
 import { scrapeMpfData } from "./lib/mpf-scraper.js";
 
-export default async function handler() {
+export const handler = async () => {
   console.log("[sync-background] Starting MPF sync");
   const result = await scrapeMpfData();
   if (result.error) {
@@ -8,4 +8,4 @@ export default async function handler() {
   } else {
     console.log(`[sync-background] Sync complete. Funds scraped: ${result.count}`);
   }
-}
+};

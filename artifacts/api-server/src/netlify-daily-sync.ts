@@ -4,7 +4,7 @@ export const config = {
   schedule: "@daily",
 };
 
-export default async function () {
+export const handler = async () => {
   console.log("[daily-sync] Starting scheduled MPF sync");
   const result = await scrapeMpfData();
   if (result.error) {
@@ -12,4 +12,4 @@ export default async function () {
   } else {
     console.log(`[daily-sync] Sync complete. Funds scraped: ${result.count}`);
   }
-}
+};
