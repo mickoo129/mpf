@@ -3,136 +3,108 @@ import { useLocation } from "wouter";
 import {
   getTopFunds,
   getBottomFunds,
-  timePeriodLabels,
   categoryLabels,
   type TimePeriod,
   type Fund,
 } from "@/data/mpf-data";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
+import { PeriodSelector } from "@/components/PeriodSelector";
+import { TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
 
-const periods: TimePeriod[] = ["1d", "1w", "1m", "mtd", "ytd", "3m", "6m", "1y", "3y", "5y", "10y"];
-
-function ReturnBadge({ value }: { value: number | null }) {
+function ReturnValue({ value, size = "md" }: { value: number | null; size?: "sm" | "md" | "lg" }) {
   if (value === null) return <span className="text-muted-foreground">--</span>;
   const isPositive = value >= 0;
+  const sizeClass = size === "lg" ? "text-xl font-bold" : size === "sm" ? "text-xs font-semibold" : "text-base font-bold";
   return (
-    <span className={`font-semibold tabular-nums ${isPositive ? "text-emerald-600" : "text-red-500"}`}>
+    <span className={`${sizeClass} tabular-nums ${isPositive ? "text-emerald-500" : "text-red-500"}`}>
       {isPositive ? "+" : ""}{value.toFixed(2)}%
     </span>
   );
 }
 
-function FundTable({ funds, period, title, icon }: { funds: Fund[]; period: TimePeriod; title: string; icon: React.ReactNode }) {
+function FundCard({ fund, rank, period, type }: { fund: Fund; rank: number; period: TimePeriod; type: "top" | "bottom" }) {
   const [, navigate] = useLocation();
+  const ret = fund.returns[period];
+  const isPositive = ret !== null && ret >= 0;
 
   return (
-    <Card className="flex-1">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          {icon}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12 text-center">#</TableHead>
-                <TableHead>基金名稱</TableHead>
-                <TableHead>受託人</TableHead>
-                <TableHead>類別</TableHead>
-                <TableHead className="text-right">回報</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {funds.map((fund, i) => (
-                <TableRow
-                  key={fund.id}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => navigate(`/fund/${fund.id}`)}
-                >
-                  <TableCell className="text-center font-bold text-muted-foreground">{i + 1}</TableCell>
-                  <TableCell>
-                    <div className="font-medium text-sm">{fund.name}</div>
-                    <div className="text-xs text-muted-foreground">{fund.scheme}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">{fund.trusteeEn}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{categoryLabels[fund.category]}</TableCell>
-                  <TableCell className="text-right">
-                    <ReturnBadge value={fund.returns[period]} />
-                  </TableCell>
-                  <TableCell>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+    <button
+      onClick={() => navigate(`/fund/${fund.id}`)}
+      className="w-full text-left flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 active:bg-muted transition-colors border-b last:border-b-0"
+    >
+      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+        type === "top"
+          ? rank <= 3 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+          : rank <= 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"
+      }`}>
+        {rank}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm text-foreground truncate">{fund.name}</div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[11px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 font-medium">{fund.trusteeEn}</span>
+          <span className="text-[11px] text-muted-foreground">{categoryLabels[fund.category]}</span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <ReturnValue value={ret} size="md" />
+        <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+      </div>
+    </button>
+  );
+}
+
+function FundSection({ funds, period, title, type }: {
+  funds: Fund[];
+  period: TimePeriod;
+  title: string;
+  type: "top" | "bottom";
+}) {
+  const icon = type === "top"
+    ? <TrendingUp className="h-4 w-4 text-emerald-500" />
+    : <TrendingDown className="h-4 w-4 text-red-500" />;
+  const accentColor = type === "top" ? "bg-emerald-500" : "bg-red-500";
+
+  return (
+    <div className="bg-card rounded-2xl border shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3.5 border-b bg-muted/30">
+        <div className={`w-1 h-5 rounded-full ${accentColor}`} />
+        {icon}
+        <span className="font-semibold text-sm text-foreground">{title}</span>
+      </div>
+      <div>
+        {funds.map((fund, i) => (
+          <FundCard key={fund.id} fund={fund} rank={i + 1} period={period} type={type} />
+        ))}
+      </div>
+    </div>
   );
 }
 
 export default function Rankings() {
   const [period, setPeriod] = useState<TimePeriod>("ytd");
-
   const topFunds = useMemo(() => getTopFunds(period, 10), [period]);
   const bottomFunds = useMemo(() => getBottomFunds(period, 10), [period]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">MPF 基金排名</h1>
-        <p className="text-muted-foreground mt-1">查看不同時間段內表現最佳及最差的強積金基金</p>
+    <div className="space-y-4">
+      <div className="pt-1">
+        <h1 className="text-xl font-bold text-foreground">MPF 基金排名</h1>
+        <p className="text-xs text-muted-foreground mt-0.5">點擊基金查看詳細走勢圖</p>
       </div>
 
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">選擇時段:</span>
-            <Tabs value={period} onValueChange={(v) => setPeriod(v as TimePeriod)}>
-              <TabsList className="flex-wrap h-auto gap-1">
-                {periods.map((p) => (
-                  <TabsTrigger key={p} value={p} className="text-xs px-3 py-1.5">
-                    {timePeriodLabels[p]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <FundTable
-          funds={topFunds}
-          period={period}
-          title="表現最佳 Top 10"
-          icon={<TrendingUp className="h-5 w-5 text-emerald-600" />}
-        />
-        <FundTable
-          funds={bottomFunds}
-          period={period}
-          title="表現最差 Bottom 10"
-          icon={<TrendingDown className="h-5 w-5 text-red-500" />}
-        />
+      <div className="bg-card rounded-2xl border shadow-sm px-4 py-3">
+        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">時間段</div>
+        <PeriodSelector value={period} onChange={setPeriod} />
       </div>
+
+      <FundSection funds={topFunds} period={period} title="表現最佳 Top 10" type="top" />
+      <FundSection funds={bottomFunds} period={period} title="表現最差 Bottom 10" type="bottom" />
+
+      <p className="text-center text-[11px] text-muted-foreground pb-2">
+        數據僅供參考，不構成投資建議
+      </p>
     </div>
   );
 }
