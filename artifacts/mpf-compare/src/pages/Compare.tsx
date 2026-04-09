@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   getMeta,
-  getAllFunds,
+  getAllFundsMultiPeriod,
   getFundDetail,
   formatReturn,
   returnColor,
   fundTypeShort,
-  type MpfFundSummary,
+  FUND_TYPE_ZH,
+  type MpfFundMultiPeriod,
   type MpfFundDetail,
   type MpfSchemeEntry,
   PERIODS,
@@ -27,6 +28,75 @@ import { X, Plus, RefreshCw, GitCompare, ChevronDown, Printer } from "lucide-rea
 const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 const CALENDAR_YEARS = ["2025", "2024", "2023", "2022", "2021"];
 
+const CATEGORIES = ["股票基金", "債券基金", "混合資產基金", "保證基金", "貨幣市場基金"];
+const TYPE_BY_CATEGORY: Record<string, string[]> = {
+  股票基金: [
+    "Equity Fund - Greater China Equity Fund",
+    "Equity Fund - Hong Kong Equity Fund",
+    "Equity Fund - Hong Kong Equity Fund (Index Tracking)",
+    "Equity Fund - China Equity Fund",
+    "Equity Fund - Asia Equity Fund",
+    "Equity Fund - Global Equity Fund",
+    "Equity Fund - United States Equity Fund",
+    "Equity Fund - Europe Equity Fund",
+    "Equity Fund - Japan Equity Fund",
+    "Equity Fund - Korea Equity Fund",
+    "Equity Fund - Uncategorized Equity Fund",
+  ],
+  債券基金: [
+    "Bond Fund - Hong Kong Dollar Bond Fund",
+    "Bond Fund - RMB Bond Fund",
+    "Bond Fund - Asia Bond Fund",
+    "Bond Fund - Global Bond Fund",
+  ],
+  混合資產基金: [
+    "Mixed Assets Fund - 81% to 100% Equity",
+    "Mixed Assets Fund - 61% to 80% Equity",
+    "Mixed Assets Fund - 41% to 60% Equity",
+    "Mixed Assets Fund - 21% to 40% Equity",
+    "Mixed Assets Fund - Default Investment Strategy - Core Accumulation Fund",
+    "Mixed Assets Fund - Default Investment Strategy - Age 65 Plus Fund",
+    "Mixed Assets Fund - Uncategorized Mixed Asset Fund",
+  ],
+  保證基金: ["Guaranteed Fund"],
+  貨幣市場基金: [
+    "Money Market Fund - MPF Conservative Fund",
+    "Money Market Fund - Other than MPF Conservative Fund",
+  ],
+};
+
+function SelBox({
+  step, label, value, onChange, options, disabled,
+}: {
+  step: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block mb-1">
+        {step} {label}
+      </label>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="w-full appearance-none bg-background border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      </div>
+    </div>
+  );
+}
+
 function FundSelector({
   schemes,
   allFunds,
@@ -34,18 +104,24 @@ function FundSelector({
   onAdd,
 }: {
   schemes: MpfSchemeEntry[];
-  allFunds: MpfFundSummary[];
+  allFunds: MpfFundMultiPeriod[];
   selected: string[];
   onAdd: (cfId: string) => void;
 }) {
+  const [category, setCategory] = useState("");
+  const [fundType, setFundType] = useState("");
   const [trustee, setTrustee] = useState("");
   const [scheme, setScheme] = useState("");
   const [fundId, setFundId] = useState("");
 
   const trustees = [...new Set(schemes.map((s) => s.trustee))].sort();
   const filteredSchemes = schemes.filter((s) => !trustee || s.trustee === trustee);
+  const typeOptions = category ? TYPE_BY_CATEGORY[category] ?? [] : [];
+
   const filteredFunds = allFunds.filter(
     (f) =>
+      (!category || f.fundCategory === category) &&
+      (!fundType || f.fundType === fundType) &&
       (!trustee || f.trustee === trustee) &&
       (!scheme || f.scheme === scheme) &&
       !selected.includes(f.cfId)
@@ -53,70 +129,62 @@ function FundSelector({
 
   const canAdd = !!fundId && !selected.includes(fundId);
 
+  const resetFrom = (level: "cat" | "type" | "trustee" | "scheme") => {
+    if (level === "cat") { setFundType(""); setTrustee(""); setScheme(""); setFundId(""); }
+    if (level === "type") { setTrustee(""); setScheme(""); setFundId(""); }
+    if (level === "trustee") { setScheme(""); setFundId(""); }
+    if (level === "scheme") { setFundId(""); }
+  };
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div className="relative">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block mb-1">
-            ① 受託人
-          </label>
-          <div className="relative">
-            <select
-              value={trustee}
-              onChange={(e) => { setTrustee(e.target.value); setScheme(""); setFundId(""); }}
-              className="w-full appearance-none bg-background border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 pr-8"
-            >
-              <option value="">全部受託人</option>
-              {trustees.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="relative">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block mb-1">
-            ② 計劃名稱
-          </label>
-          <div className="relative">
-            <select
-              value={scheme}
-              onChange={(e) => { setScheme(e.target.value); setFundId(""); }}
-              disabled={!trustee}
-              className="w-full appearance-none bg-background border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 pr-8 disabled:opacity-50"
-            >
-              <option value="">全部計劃</option>
-              {filteredSchemes.map((s) => (
-                <option key={s.scheme} value={s.scheme}>
-                  {s.scheme.replace(s.trustee + " ", "").replace(/Mandatory Provident Fund/gi, "MPF")}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="relative">
-          <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block mb-1">
-            ③ 選擇基金
-          </label>
-          <div className="relative">
-            <select
-              value={fundId}
-              onChange={(e) => setFundId(e.target.value)}
-              disabled={filteredFunds.length === 0}
-              className="w-full appearance-none bg-background border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 pr-8 disabled:opacity-50"
-            >
-              <option value="">{filteredFunds.length === 0 ? "請先選受託人" : `選擇基金 (${filteredFunds.length}隻)`}</option>
-              {filteredFunds.map((f) => (
-                <option key={f.cfId} value={f.cfId}>
-                  {f.nameZh || f.nameEn}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <SelBox
+          step="①" label="基金類別"
+          value={category}
+          onChange={(v) => { setCategory(v); resetFrom("cat"); }}
+          options={[{ value: "", label: "全部類別" }, ...CATEGORIES.map((c) => ({ value: c, label: c }))]}
+        />
+        <SelBox
+          step="②" label="基金種類"
+          value={fundType}
+          onChange={(v) => { setFundType(v); resetFrom("type"); }}
+          disabled={!category}
+          options={[
+            { value: "", label: category ? `全部 ${category}` : "先選基金類別" },
+            ...typeOptions.map((t) => ({ value: t, label: FUND_TYPE_ZH[t] ?? t })),
+          ]}
+        />
+        <SelBox
+          step="③" label="受託人"
+          value={trustee}
+          onChange={(v) => { setTrustee(v); resetFrom("trustee"); }}
+          options={[{ value: "", label: "全部受託人" }, ...trustees.map((t) => ({ value: t, label: t }))]}
+        />
+        <SelBox
+          step="④" label="計劃"
+          value={scheme}
+          onChange={(v) => { setScheme(v); resetFrom("scheme"); }}
+          disabled={!trustee}
+          options={[
+            { value: "", label: trustee ? `全部計劃 (${filteredSchemes.length})` : "先選受託人" },
+            ...filteredSchemes.map((s) => ({
+              value: s.scheme,
+              label: s.scheme.replace(/Mandatory Provident Fund/gi, "MPF").substring(0, 30),
+            })),
+          ]}
+        />
+        <div className="col-span-2 sm:col-span-2">
+          <SelBox
+            step="⑤" label="基金"
+            value={fundId}
+            onChange={(v) => setFundId(v)}
+            disabled={filteredFunds.length === 0}
+            options={[
+              { value: "", label: filteredFunds.length === 0 ? "未有符合基金" : `選擇基金 (${filteredFunds.length} 隻)` },
+              ...filteredFunds.map((f) => ({ value: f.cfId, label: f.nameZh || f.nameEn })),
+            ]}
+          />
         </div>
       </div>
 
@@ -135,14 +203,14 @@ function FundSelector({
 export default function Compare() {
   const [, navigate] = useLocation();
   const [schemes, setSchemes] = useState<MpfSchemeEntry[]>([]);
-  const [allFunds, setAllFunds] = useState<MpfFundSummary[]>([]);
+  const [allFunds, setAllFunds] = useState<MpfFundMultiPeriod[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [details, setDetails] = useState<Record<string, MpfFundDetail>>({});
   const [detailLoading, setDetailLoading] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    Promise.all([getMeta(), getAllFunds({ period: "1y" })]).then(([meta, funds]) => {
+    Promise.all([getMeta(), getAllFundsMultiPeriod()]).then(([meta, funds]) => {
       setSchemes(meta.schemes);
       setAllFunds(funds);
       setLoadingMeta(false);
@@ -187,7 +255,7 @@ export default function Compare() {
         <div>
           <h1 className="text-xl font-bold text-foreground">比較基金</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            最多比較 4 隻基金 · 按受託人 → 計劃 → 基金逐步選擇
+            最多比較 4 隻基金 · 按積金局 4 維分類選擇
           </p>
         </div>
         {loadedDetails.length >= 2 && (
@@ -251,7 +319,9 @@ export default function Compare() {
         <div className="bg-card rounded-2xl border shadow-sm p-12 text-center">
           <GitCompare className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
           <p className="text-sm font-medium text-muted-foreground">按上方步驟選擇基金開始比較</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">先選受託人 → 計劃名稱 → 基金</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            ① 基金類別 → ② 基金種類 → ③ 受託人 → ④ 計劃 → ⑤ 基金
+          </p>
         </div>
       )}
 
@@ -293,7 +363,7 @@ export default function Compare() {
                               {d.trustee} · {d.scheme.replace(/Mandatory Provident Fund/gi, "MPF").substring(0, 22)}
                             </div>
                             <div className="text-[10px] text-muted-foreground/60 mt-0.5 pl-[11px]">
-                              {fundTypeShort(d.fundType)}
+                              {FUND_TYPE_ZH[d.fundType] ?? fundTypeShort(d.fundType)}
                             </div>
                           </button>
                         </td>
