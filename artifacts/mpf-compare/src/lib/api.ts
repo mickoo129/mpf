@@ -119,6 +119,62 @@ export async function getAllFunds(opts?: {
   return get<MpfFundSummary[]>(`/mpf/funds?${params}`);
 }
 
+export interface MpfFundMultiPeriod {
+  cfId: string;
+  nameEn: string;
+  nameZh: string | null;
+  trustee: string;
+  trusteeCode: string;
+  scheme: string;
+  fundType: string;
+  fundCategory: string;
+  launchDate: string | null;
+  fundSizeHkm: number | null;
+  riskClass: number | null;
+  ferPct: number | null;
+  returns: Record<string, { ann: number | null; cum: number | null }>;
+}
+
+export async function getAllFundsMultiPeriod(opts?: {
+  search?: string;
+  category?: string;
+  trustee?: string;
+}): Promise<MpfFundMultiPeriod[]> {
+  const params = new URLSearchParams({ multiPeriod: "true" });
+  if (opts?.search) params.set("search", opts.search);
+  if (opts?.category) params.set("category", opts.category);
+  if (opts?.trustee) params.set("trustee", opts.trustee);
+  return get<MpfFundMultiPeriod[]>(`/mpf/funds?${params}`);
+}
+
+export const FUND_TYPE_ZH: Record<string, string> = {
+  "Equity Fund - Asia Equity Fund": "亞洲股票基金",
+  "Equity Fund - China Equity Fund": "中國股票基金",
+  "Equity Fund - Europe Equity Fund": "歐洲股票基金",
+  "Equity Fund - Global Equity Fund": "環球股票基金",
+  "Equity Fund - Greater China Equity Fund": "大中華股票基金",
+  "Equity Fund - Hong Kong Equity Fund": "香港股票基金",
+  "Equity Fund - Hong Kong Equity Fund (Index Tracking)": "香港股票指數基金",
+  "Equity Fund - Japan Equity Fund": "日本股票基金",
+  "Equity Fund - Uncategorized Equity Fund": "其他股票基金",
+  "Equity Fund - United States Equity Fund": "美國股票基金",
+  "Equity Fund - Korea Equity Fund": "韓國股票基金",
+  "Bond Fund - Asia Bond Fund": "亞洲債券基金",
+  "Bond Fund - Global Bond Fund": "環球債券基金",
+  "Bond Fund - Hong Kong Dollar Bond Fund": "港元債券基金",
+  "Bond Fund - RMB Bond Fund": "人民幣債券基金",
+  "Mixed Assets Fund - 21% to 40% Equity": "混合資產 (21-40% 股票)",
+  "Mixed Assets Fund - 41% to 60% Equity": "混合資產 (41-60% 股票)",
+  "Mixed Assets Fund - 61% to 80% Equity": "混合資產 (61-80% 股票)",
+  "Mixed Assets Fund - 81% to 100% Equity": "混合資產 (81-100% 股票)",
+  "Mixed Assets Fund - Default Investment Strategy - Age 65 Plus Fund": "預設策略 (65歲後)",
+  "Mixed Assets Fund - Default Investment Strategy - Core Accumulation Fund": "預設策略 (核心累積)",
+  "Mixed Assets Fund - Uncategorized Mixed Asset Fund": "其他混合資產基金",
+  "Money Market Fund - MPF Conservative Fund": "強積金保守基金",
+  "Money Market Fund - Other than MPF Conservative Fund": "其他貨幣市場基金",
+  "Guaranteed Fund": "保證基金",
+};
+
 export async function getRankings(
   period: string,
   limit = 10

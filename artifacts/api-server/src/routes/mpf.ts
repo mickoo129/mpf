@@ -76,6 +76,51 @@ router.get("/mpf/funds", async (req, res): Promise<void> => {
   const trustee = req.query.trustee as string | undefined;
   const category = req.query.category as string | undefined;
   const search = (req.query.search as string | undefined)?.toLowerCase().trim();
+  const multiPeriod = req.query.multiPeriod === "true";
+
+  if (multiPeriod) {
+    const allReturns = await db.select().from(mpfReturnsTable);
+    const allFunds = await db.select().from(mpfFundsTable);
+
+    const returnsByFund = new Map<number, Record<string, { ann: number | null; cum: number | null }>>();
+    for (const r of allReturns) {
+      if (!returnsByFund.has(r.fundId)) returnsByFund.set(r.fundId, {});
+      returnsByFund.get(r.fundId)![r.period] = {
+        ann: parseNum(r.annualizedReturn),
+        cum: parseNum(r.cumulativeReturn),
+      };
+    }
+
+    let result = allFunds.map((f) => ({
+      cfId: f.cfId,
+      nameEn: f.nameEn,
+      nameZh: f.nameZh ?? null,
+      trustee: f.trustee,
+      trusteeCode: f.trusteeCode,
+      scheme: f.scheme,
+      fundType: f.fundType,
+      fundCategory: f.fundCategory,
+      launchDate: f.launchDate ?? null,
+      fundSizeHkm: parseNum(f.fundSizeHkm),
+      riskClass: f.riskClass ?? null,
+      ferPct: parseNum(f.ferPct),
+      returns: returnsByFund.get(f.id) ?? {},
+    }));
+
+    if (search) {
+      result = result.filter(
+        (f) =>
+          (f.nameZh ?? "").toLowerCase().includes(search) ||
+          f.nameEn.toLowerCase().includes(search) ||
+          f.trustee.toLowerCase().includes(search) ||
+          f.scheme.toLowerCase().includes(search)
+      );
+    }
+    if (trustee) result = result.filter((f) => f.trustee === trustee);
+    if (category) result = result.filter((f) => f.fundCategory === category);
+
+    return void res.json(result);
+  }
 
   let funds = await getFundsWithReturn(period, trustee, category);
   if (search) {
