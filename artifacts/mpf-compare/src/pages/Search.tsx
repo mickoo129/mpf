@@ -2,43 +2,18 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   getAllFunds,
+  getMeta,
   formatReturn,
   returnColor,
   fundTypeShort,
   type MpfFundSummary,
+  type MpfSchemeEntry,
   PERIODS,
 } from "@/lib/api";
 import { PeriodSelector } from "@/components/PeriodSelector";
-import { Search as SearchIcon, X, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Search as SearchIcon, X, RefreshCw, SlidersHorizontal, ChevronDown } from "lucide-react";
 
-const CATEGORIES = [
-  "全部類別",
-  "股票基金",
-  "債券基金",
-  "混合資產基金",
-  "保證基金",
-  "貨幣市場基金",
-  "其他",
-];
-
-const TRUSTEES = [
-  "全部受託人",
-  "AIA",
-  "BCT",
-  "BCM",
-  "BEA",
-  "BOC-Prudential",
-  "China Life",
-  "Fidelity",
-  "Haitong",
-  "Hang Seng",
-  "HSBC",
-  "Manulife",
-  "Principal",
-  "Standard Chartered",
-  "Sun Life",
-  "YF Life",
-];
+const CATEGORIES = ["全部類別", "股票基金", "債券基金", "混合資產基金", "保證基金", "貨幣市場基金"];
 
 export default function Search() {
   const [, navigate] = useLocation();
@@ -46,7 +21,9 @@ export default function Search() {
   const [period, setPeriod] = useState("1y");
   const [category, setCategory] = useState("全部類別");
   const [trustee, setTrustee] = useState("全部受託人");
+  const [scheme, setScheme] = useState("全部計劃");
   const [allFunds, setAllFunds] = useState<MpfFundSummary[]>([]);
+  const [schemes, setSchemes] = useState<MpfSchemeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -55,19 +32,28 @@ export default function Search() {
   const load = (p: string) => {
     setLoading(true);
     setError(null);
-    getAllFunds({ period: p })
-      .then(setAllFunds)
+    Promise.all([getAllFunds({ period: p }), getMeta()])
+      .then(([funds, meta]) => {
+        setAllFunds(funds);
+        setSchemes(meta.schemes);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    load(period);
-  }, [period]);
+  useEffect(() => { load(period); }, [period]);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const trustees = ["全部受託人", ...new Set(schemes.map((s) => s.trustee)).values()].sort(
+    (a, b) => a === "全部受託人" ? -1 : b === "全部受託人" ? 1 : a.localeCompare(b)
+  );
+
+  const filteredSchemes = [
+    "全部計劃",
+    ...schemes
+      .filter((s) => trustee === "全部受託人" || s.trustee === trustee)
+      .map((s) => s.scheme),
+  ];
 
   const filtered = allFunds.filter((f) => {
     const q = query.toLowerCase();
@@ -75,10 +61,12 @@ export default function Search() {
       !q ||
       (f.nameZh ?? "").toLowerCase().includes(q) ||
       f.nameEn.toLowerCase().includes(q) ||
-      f.trustee.toLowerCase().includes(q);
+      f.trustee.toLowerCase().includes(q) ||
+      f.scheme.toLowerCase().includes(q);
     const matchCat = category === "全部類別" || f.fundCategory === category;
     const matchTrustee = trustee === "全部受託人" || f.trustee === trustee;
-    return matchSearch && matchCat && matchTrustee;
+    const matchScheme = scheme === "全部計劃" || f.scheme === scheme;
+    return matchSearch && matchCat && matchTrustee && matchScheme;
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -89,13 +77,18 @@ export default function Search() {
   });
 
   const periodLabel = PERIODS.find((p) => p.id === period)?.labelZh || period;
+  const activeFilterCount = [
+    category !== "全部類別",
+    trustee !== "全部受託人",
+    scheme !== "全部計劃",
+  ].filter(Boolean).length;
 
   return (
     <div className="space-y-3">
       <div className="pt-1">
         <h1 className="text-xl font-bold text-foreground">搜尋基金</h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          447 隻基金 · 按名稱、受託人搜尋
+          {loading ? "載入中..." : `${allFunds.length} 隻基金`} · 按名稱、受託人、計劃搜尋
         </p>
       </div>
 
@@ -107,7 +100,7 @@ export default function Search() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜尋基金名稱、受託人..."
+            placeholder="搜尋基金名稱、受託人、計劃..."
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
           />
           {query && (
@@ -117,10 +110,10 @@ export default function Search() {
           )}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors ${showFilters ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors ${showFilters || activeFilterCount > 0 ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"}`}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
-            篩選
+            篩選{activeFilterCount > 0 && <span className="bg-primary text-primary-foreground rounded-full w-4 h-4 text-[10px] flex items-center justify-center">{activeFilterCount}</span>}
           </button>
         </div>
 
@@ -130,42 +123,76 @@ export default function Search() {
               <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">時間段</div>
               <PeriodSelector value={period} onChange={setPeriod} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">基金類別</div>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full text-xs bg-background border rounded-lg px-2.5 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">受託人</div>
-                <select
-                  value={trustee}
-                  onChange={(e) => setTrustee(e.target.value)}
-                  className="w-full text-xs bg-background border rounded-lg px-2.5 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary"
-                >
-                  {TRUSTEES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={trustee}
+                    onChange={(e) => { setTrustee(e.target.value); setScheme("全部計劃"); }}
+                    className="w-full appearance-none text-xs bg-background border rounded-lg px-2.5 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary pr-7"
+                  >
+                    {trustees.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">計劃名稱</div>
+                <div className="relative">
+                  <select
+                    value={scheme}
+                    onChange={(e) => setScheme(e.target.value)}
+                    className="w-full appearance-none text-xs bg-background border rounded-lg px-2.5 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary pr-7"
+                  >
+                    {filteredSchemes.map((s) => (
+                      <option key={s} value={s}>
+                        {s === "全部計劃" ? s : s.replace(/Mandatory Provident Fund/gi, "MPF")}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">基金類別</div>
+                <div className="relative">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full appearance-none text-xs bg-background border rounded-lg px-2.5 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary pr-7"
+                  >
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                </div>
               </div>
             </div>
+
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => { setCategory("全部類別"); setTrustee("全部受託人"); setScheme("全部計劃"); }}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                清除所有篩選
+              </button>
+            )}
           </div>
         )}
 
-        <div className="px-4 py-2 flex items-center justify-between bg-muted/20">
+        <div className="px-4 py-2 flex items-center justify-between bg-muted/10">
           <span className="text-[11px] text-muted-foreground">
             {loading ? "載入中..." : `找到 ${sorted.length} 隻基金`}
+            {scheme !== "全部計劃" && (
+              <span className="ml-1.5 text-primary font-medium">
+                · {scheme.replace(/Mandatory Provident Fund/gi, "MPF")}
+              </span>
+            )}
           </span>
-          <span className="text-[11px] text-muted-foreground">
-            {periodLabel} 年化回報
-          </span>
+          <span className="text-[11px] text-muted-foreground">{periodLabel} 年化回報</span>
         </div>
       </div>
 
@@ -192,6 +219,14 @@ export default function Search() {
           {sorted.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground text-sm">沒有符合條件的基金</p>
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={() => { setCategory("全部類別"); setTrustee("全部受託人"); setScheme("全部計劃"); setQuery(""); }}
+                  className="mt-2 text-xs text-primary font-medium hover:underline"
+                >
+                  清除篩選
+                </button>
+              )}
             </div>
           ) : (
             sorted.map((fund, i) => (
@@ -207,6 +242,9 @@ export default function Search() {
                   <div className="font-medium text-sm text-foreground truncate">
                     {fund.nameZh || fund.nameEn}
                   </div>
+                  <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                    {fund.scheme.replace(/Mandatory Provident Fund/gi, "MPF")}
+                  </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 font-medium">
                       {fund.trustee}
@@ -215,9 +253,10 @@ export default function Search() {
                       {fundTypeShort(fund.fundType)}
                     </span>
                     {fund.riskClass && (
-                      <span className="text-[10px] text-muted-foreground">
-                        風險 {fund.riskClass}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground">風險 {fund.riskClass}</span>
+                    )}
+                    {fund.ferPct && (
+                      <span className="text-[10px] text-muted-foreground">FER {fund.ferPct.toFixed(2)}%</span>
                     )}
                   </div>
                 </div>
@@ -232,7 +271,7 @@ export default function Search() {
 
       {!loading && !error && sorted.length > 0 && (
         <p className="text-center text-[11px] text-muted-foreground pb-2">
-          數據來源：積金局 · 僅供參考，不構成投資建議
+          數據來源：積金局 · 數據截至 2026年2月 · 僅供參考，不構成投資建議
         </p>
       )}
     </div>

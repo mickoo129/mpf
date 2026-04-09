@@ -144,6 +144,23 @@ export async function getSyncStatus(): Promise<MpfSyncStatus> {
   return get<MpfSyncStatus>("/mpf/sync/status");
 }
 
+export interface MpfSchemeEntry {
+  scheme: string;
+  trustee: string;
+  trusteeCode: string;
+}
+
+export interface MpfMeta {
+  dataAsOf: string;
+  syncedAt: string | null;
+  totalFunds: number;
+  schemes: MpfSchemeEntry[];
+}
+
+export async function getMeta(): Promise<MpfMeta> {
+  return get<MpfMeta>("/mpf/meta");
+}
+
 export async function triggerSync(): Promise<{ message: string; count: number }> {
   const res = await fetch(`${BASE}/mpf/sync`, { method: "POST" });
   if (!res.ok) throw new Error("Sync failed");

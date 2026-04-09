@@ -217,6 +217,30 @@ router.get("/mpf/trustees", async (req, res): Promise<void> => {
   res.json(result);
 });
 
+router.get("/mpf/meta", async (req, res): Promise<void> => {
+  const [last] = await db
+    .select()
+    .from(mpfSyncLogTable)
+    .orderBy(desc(mpfSyncLogTable.startedAt))
+    .limit(1);
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(mpfFundsTable);
+
+  const schemes = await db
+    .selectDistinct({ scheme: mpfFundsTable.scheme, trustee: mpfFundsTable.trustee, trusteeCode: mpfFundsTable.trusteeCode })
+    .from(mpfFundsTable)
+    .orderBy(asc(mpfFundsTable.trustee), asc(mpfFundsTable.scheme));
+
+  res.json({
+    dataAsOf: "2026年2月",
+    syncedAt: last?.completedAt ?? null,
+    totalFunds: Number(countRow?.count ?? 0),
+    schemes,
+  });
+});
+
 router.post("/mpf/sync", async (req, res): Promise<void> => {
   req.log.info("Manual MPF sync triggered");
   const result = await scrapeMpfData();

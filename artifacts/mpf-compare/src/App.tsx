@@ -9,7 +9,7 @@ import TrusteeComparison from "@/pages/TrusteeComparison";
 import Search from "@/pages/Search";
 import Compare from "@/pages/Compare";
 import Calculator from "@/pages/Calculator";
-import { Trophy, SearchIcon, GitCompare, BarChart3, Calculator as CalcIcon } from "lucide-react";
+import { Trophy, SearchIcon, GitCompare, BarChart3, Calculator as CalcIcon, Clock } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -74,6 +74,12 @@ function DesktopNav() {
 function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
+      <div className="bg-primary/5 border-b px-4 py-1.5 text-center">
+        <span className="text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+          <Clock className="h-3 w-3" />
+          積金局數據截至 <strong className="text-foreground">2026年2月</strong> · 447 隻基金 · 僅供參考，不構成投資建議
+        </span>
+      </div>
       <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
